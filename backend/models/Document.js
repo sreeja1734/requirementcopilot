@@ -6,7 +6,8 @@ const DocumentSchema = new mongoose.Schema({
   filePath: { type: String },
   originalName: { type: String },
   createdAt: { type: Date, default: Date.now },
-  srs: { type: String } 
+  srs: { type: String } ,
+  brd: { type: String }  
 });
 
 module.exports = mongoose.model('Document', DocumentSchema);
