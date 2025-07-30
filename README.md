@@ -1,8 +1,8 @@
 # requirementcopilot
 
 packages for front end:
-**
-frontend@0.1.0 /Desktop/reqcopilot/frontend
+
+frontend@0.1.0 /reqcopilot/frontend
 ├── @testing-library/dom@10.4.0
 ├── @testing-library/jest-dom@6.6.3
 ├── @testing-library/react@16.3.0
@@ -18,8 +18,8 @@ frontend@0.1.0 /Desktop/reqcopilot/frontend
 └── web-vitals@2.1.4
 
 packages for backend:
-##
-backend@1.0.0 /Users/sreeja/Desktop/reqcopilot/backend
+
+backend@1.0.0 /reqcopilot/backend
 ├── axios@1.10.0
 ├── cors@2.8.5
 ├── express@5.1.0
