@@ -8,46 +8,6 @@ const brdTemplate = require('../templates/brdTemplate');
 const frsTemplate = require('../templates/frsTemplate');
 const userStoriesTemplate = require('../templates/userStoriesTemplate');
 
-const fs = require('fs');
-const pdf = require('pdf-parse'); // You'll need to install this: npm install pdf-parse
-
-// Helper function to extract text from PDF
-async function extractTextFromPDF(filePath) {
-  try {
-    const dataBuffer = fs.readFileSync(filePath);
-    const data = await pdf(dataBuffer);
-    return data.text;
-  } catch (error) {
-    console.error('Error extracting text from PDF:', error);
-    return null;
-  }
-}
-
-// Helper function to get document content
-async function getDocumentContent(doc) {
-  let userInput = '';
-  
-  if (doc.inputType === 'text' && doc.text) {
-    userInput = doc.text;
-  } else if (doc.inputType === 'document' && doc.filePath) {
-    // Check if it's a PDF file
-    if (doc.originalName && doc.originalName.toLowerCase().endsWith('.pdf')) {
-      const extractedText = await extractTextFromPDF(doc.filePath);
-      if (extractedText) {
-        userInput = extractedText;
-      } else {
-        userInput = `Unable to extract text from PDF file: ${doc.originalName}`;
-      }
-    } else {
-      userInput = `Uploaded document (file: ${doc.originalName}) - Text extraction not supported for this file type`;
-    }
-  } else if (doc.inputType === 'image') {
-    userInput = `Uploaded image (file: ${doc.originalName}) - Please provide text description or requirements`;
-  }
-  
-  return userInput;
-}
-
 // Generate SRS 
 router.post('/:id/generate-srs', async (req, res) => {
   const { id } = req.params;
@@ -84,7 +44,7 @@ ${userInput}
   }
 });
 
-// Generate BRD (enhanced with PDF text extraction)
+// Generate BRD 
 router.post('/:id/generate-brd', async (req, res) => {
   const { id } = req.params;
   const doc = await Document.findById(id);

@@ -9,9 +9,7 @@ import os
 app = FastAPI()
 
 load_dotenv()
-# genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-genai.configure(api_key="AIzaSyCPfRUOv3G_6sUernh48rwCHWvQyc7w1AI")
-
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 class SRSRequest(BaseModel):
     prompt: str
@@ -66,8 +64,6 @@ async def generate_user_stories(req: SRSRequest):
         return {"userStories": response.text}
     except Exception as e:
         return {"error": str(e)}
-
-
 
 @app.get("/list-models")
 async def list_models():

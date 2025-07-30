@@ -10,7 +10,6 @@ const DocumentSchema = new mongoose.Schema({
   brd: { type: String } ,
   frs: { type: String } ,
   userStories: { type: String } 
-
 });
 
 module.exports = mongoose.model('Document', DocumentSchema);
