@@ -1,0 +1,15 @@
+/* App-specific styles that complement Tailwind CSS */
+.App {
+  text-align: left;
+}
+
+/* Custom focus styles for better accessibility */
+.focus-ring:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for interactive elements */
+.transition-all {
+  transition: all 0.2s ease-in-out;
+}
