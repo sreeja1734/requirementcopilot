@@ -1,7 +1,7 @@
 # requirementcopilot
 
 packages for front end:
-##
+**
 frontend@0.1.0 /Desktop/reqcopilot/frontend
 ├── @testing-library/dom@10.4.0
 ├── @testing-library/jest-dom@6.6.3
