@@ -108,7 +108,8 @@ export const getDocumentType = (menuItem) => {
       return 'FRS';
     case 'Generate SRS':
       return 'SRS';
-    case 'User Stories':
+    case 'Generate User Stories':
+   
       return 'UserStory';
     default:
       return 'BRD';

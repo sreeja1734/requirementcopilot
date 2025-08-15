@@ -22,20 +22,25 @@ const srsTemplate = `
 ## 4. Non-Functional Requirements
 - List and describe all non-functional requirements.
 
-## 5. UML Diagrams
+## 5. Use Case Diagrams
+- System use case diagram
+- Actor relationships
+- Use case interactions
+
+## 6. UML Diagrams
 - Include relevant UML diagrams (e.g., Use Case, Class, Sequence diagrams). 
 - For each diagram, provide a description and, if possible, a link or image.
 
-## 6. Requirements Traceability Matrix
+## 7. Requirements Traceability Matrix
 | Requirement ID | Description | Source | Related Design | Test Cases |
 |----------------|-------------|--------|---------------|------------|
 |                |             |        |               |            |
 
-## 7. Data Specifications
+## 8. Data Specifications
 - Describe data models, entities, and relationships.
 - Include tables or diagrams as needed.
 
-## 8. Appendices
+## 9. Appendices
 - Any additional information.
 
 ---

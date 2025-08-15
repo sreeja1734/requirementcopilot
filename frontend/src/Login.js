@@ -24,7 +24,6 @@ function Login({ onLogin }) {
     // Simulate login API call
     setTimeout(() => {
       if (credentials.username && credentials.password) {
-        // For demo purposes, accept any non-empty credentials
         onLogin({
           username: credentials.username,
           name: credentials.username

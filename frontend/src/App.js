@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import './App.css';
+import rehypeRaw from 'rehype-raw'; 
 import Login from './Login';
 import { api, uploadFile, getDocumentType } from './api';
+import ReactMarkdown from "react-markdown";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,6 +17,8 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
   const [backendStatus, setBackendStatus] = useState('checking');
+  const [isEditing, setIsEditing] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const menuItems = [
     'Generate BRD',
@@ -24,7 +27,10 @@ function App() {
     'Generate User Stories'
   ];
 
-  // Check backend health on component mount
+  const CustomImage = ({ src, alt }) => {
+    return <img src={src} alt={alt} style={{ maxWidth: "100%" }} />;
+  };
+
   useEffect(() => {
     checkBackendHealth();
   }, []);
@@ -50,7 +56,6 @@ function App() {
     clearAllContent();
   };
 
-  // Function to clear all content
   const clearAllContent = () => {
     setContext('');
     setUploadedFiles([]);
@@ -60,7 +65,6 @@ function App() {
     setError('');
   };
 
-  // Handle menu selection change
   const handleMenuChange = (newMenu) => {
     if (newMenu !== selectedMenu) {
       setSelectedMenu(newMenu);
@@ -116,38 +120,21 @@ function App() {
       const docType = getDocumentType(selectedMenu);
       let documentId;
 
-      console.log('Generation Debug:', {
-        hasContext: !!context.trim(),
-        contextLength: context.trim().length,
-        uploadedFilesCount: uploadedFiles.length,
-        docType: docType
-      });
-
-      // Upload context if provided
       if (context.trim()) {
-        console.log('Using text context for generation');
         const textResult = await api.uploadText(context, docType);
         documentId = textResult._id;
-        console.log('Text uploaded with ID:', documentId);
       } else if (uploadedFiles.length > 0) {
-        // Use the first uploaded file only if no context is provided
-        console.log('Using uploaded file for generation');
         documentId = uploadedFiles[0].backendId;
-        console.log('Using file ID:', documentId);
       } else {
         throw new Error('No content provided for generation');
       }
 
-      // Generate document
-      console.log('Generating document with ID:', documentId);
       const result = await api.generateDocument(documentId, docType);
       
       setGeneratedDocument(result.generatedContent);
       setIsDocumentGenerated(true);
       setError('');
-      console.log('Document generated successfully');
     } catch (error) {
-      console.error('Generation error:', error);
       setError(error.message);
       setIsDocumentGenerated(false);
     } finally {
@@ -155,7 +142,67 @@ function App() {
     }
   };
 
-  // Show login page if not authenticated
+  const handleEditDocument = () => {
+    setIsEditing(true);
+  };
+
+  const handleSaveDocument = () => {
+    setIsEditing(false);
+  };
+
+  const handleCopyDocument = async () => {
+    try {
+      // Get the rendered document content
+      const documentElement = document.getElementById('generated-document-content');
+      
+      if (documentElement) {
+        // Create a range and selection to copy the formatted content
+        const range = document.createRange();
+        range.selectNodeContents(documentElement);
+        
+        // Try modern clipboard API with both HTML and plain text
+        if (navigator.clipboard && window.ClipboardItem) {
+          const htmlBlob = new Blob([documentElement.outerHTML], { type: 'text/html' });
+          const textBlob = new Blob([documentElement.innerText], { type: 'text/plain' });
+          
+          const clipboardItem = new ClipboardItem({
+            'text/html': htmlBlob,
+            'text/plain': textBlob
+          });
+          
+          await navigator.clipboard.write([clipboardItem]);
+        } else {
+          // Fallback: use selection API
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          
+          // Copy the selected content (maintains formatting in most apps)
+          document.execCommand('copy');
+          selection.removeAllRanges();
+        }
+        
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      } else {
+        // Fallback to markdown text if element not found
+        await navigator.clipboard.writeText(generatedDocument);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      }
+    } catch (error) {
+      console.error('Failed to copy formatted document:', error);
+      // Final fallback - copy as plain text
+      try {
+        await navigator.clipboard.writeText(generatedDocument);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      } catch (fallbackError) {
+        console.error('All copy methods failed:', fallbackError);
+      }
+    }
+  };
+
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;
   }
@@ -164,11 +211,9 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gray-800 text-white p-4 flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <div>
-            <div className="text-lg font-semibold">Requirement Copilot</div>
-            <div className="text-sm text-gray-300">{selectedMenu}</div>
-          </div>
+        <div>
+          <div className="text-lg font-semibold">Requirement Copilot</div>
+          <div className="text-sm text-gray-300">{selectedMenu}</div>
         </div>
         <div className="text-center">
           <div className="text-lg">Welcome {user?.name || 'User'}</div>
@@ -186,140 +231,278 @@ function App() {
 
       <div className="flex">
         {/* Sidebar */}
-        <div className="w-80 bg-white shadow-lg min-h-screen">
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Document Generator</h2>
-            
-            {/* Navigation Menu */}
-            <nav className="mb-8">
-              {menuItems.map((item) => (
-                <div
-                  key={item}
-                  className={`mb-2 cursor-pointer p-3 rounded-lg transition-colors ${
-                    selectedMenu === item
-                      ? 'bg-gray-100 border-l-4 border-blue-500 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleMenuChange(item)}
-                >
-                  {item}
-                </div>
-              ))}
-            </nav>
-
-            {/* Error Display */}
-            {error && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
-                {error}
+        <div className="w-80 bg-white shadow-lg min-h-screen p-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6">Document Generator</h2>
+          <nav className="mb-8">
+            {menuItems.map((item) => (
+              <div
+                key={item}
+                className={`mb-2 cursor-pointer p-3 rounded-lg transition-colors ${
+                  selectedMenu === item
+                    ? 'bg-gray-100 border-l-4 border-blue-500 text-blue-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+                onClick={() => handleMenuChange(item)}
+              >
+                {item}
               </div>
-            )}
+            ))}
+          </nav>
 
-            {/* Context Input */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Context
-              </label>
-              <textarea
-                value={context}
-                onChange={(e) => setContext(e.target.value)}
-                placeholder="Provide context here"
-                className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+              {error}
             </div>
+          )}
 
-            {/* File Upload */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Upload document with related information
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                <div className="text-gray-500 mb-2 text-sm">Drag and drop file here</div>
-                <div className="text-xs text-gray-400 mb-3">
-                  Limit 200MB per file • TXT, DOCX, PDF, PNG, JPG, JPEG
-                </div>
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="file-upload"
-                  accept=".txt,.docx,.pdf,.png,.jpg,.jpeg"
-                  disabled={isUploading}
-                />
-                <label
-                  htmlFor="file-upload"
-                  className={`inline-block px-3 py-2 rounded border cursor-pointer transition-colors text-sm ${
-                    isUploading 
-                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                      : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
-                  }`}
-                >
-                  {isUploading ? 'Uploading...' : 'Browse files'}
-                </label>
-              </div>
-              
-              {/* Uploaded Files */}
-              {uploadedFiles.map((file) => (
-                <div key={file.id} className="flex items-center justify-between bg-gray-50 p-2 rounded mt-2">
-                  <div className="flex items-center">
-                    <span className="text-gray-600 mr-2">📄</span>
-                    <span className="text-xs">{file.name}</span>
-                    <span className="text-xs text-gray-400 ml-2">{file.size}</span>
-                  </div>
-                  <button
-                    onClick={() => removeFile(file.id)}
-                    className="text-red-500 hover:text-red-700 text-xs"
-                    disabled={isUploading}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Generate Button */}
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating || backendStatus !== 'connected'}
-              className={`w-full font-semibold py-3 px-6 rounded-lg transition-colors ${
-                isGenerating || backendStatus !== 'connected'
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-orange-500 hover:bg-orange-600 text-white'
-              }`}
-            >
-              {isGenerating ? 'Generating...' : 'Generate'}
-            </button>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Context
+            </label>
+            <textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              placeholder="Provide context here"
+              className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none text-sm"
+            />
           </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload document with related information
+            </label>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <input
+                type="file"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
+                id="file-upload"
+                accept=".txt,.docx,.pdf,.png,.jpg,.jpeg"
+                disabled={isUploading}
+              />
+              <label
+                htmlFor="file-upload"
+                className={`inline-block px-3 py-2 rounded border cursor-pointer text-sm ${
+                  isUploading 
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'
+                }`}
+              >
+                {isUploading ? 'Uploading...' : 'Browse files'}
+              </label>
+            </div>
+            {uploadedFiles.map((file) => (
+              <div key={file.id} className="flex items-center justify-between bg-gray-50 p-2 rounded mt-2">
+                <span className="text-xs">{file.name} ({file.size})</span>
+                <button
+                  onClick={() => removeFile(file.id)}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || backendStatus !== 'connected'}
+            className={`w-full font-semibold py-3 px-6 rounded-lg ${
+              isGenerating || backendStatus !== 'connected'
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-orange-500 hover:bg-orange-600 text-white'
+            }`}
+          >
+            {isGenerating ? 'Generating...' : 'Generate'}
+          </button>
         </div>
 
-        {/* Main Content - Document Display */}
+        {/* Main Content */}
         <div className="flex-1 p-6">
           <div className="bg-white rounded-lg shadow-md p-6 h-full">
             {isDocumentGenerated && (
-              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                Document generated successfully
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 flex justify-between items-center">
+                <span>Document generated successfully</span>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleCopyDocument}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      copySuccess 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-500 hover:bg-gray-600 text-white'
+                    }`}
+                    title="Copy document to clipboard"
+                  >
+                    {copySuccess ? '✓ Copied!' : '📋 Copy'}
+                  </button>
+                  {!isEditing ? (
+                    <button
+                      onClick={handleEditDocument}
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                    >
+                      ✏️ Edit
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSaveDocument}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm"
+                    >
+                      💾 Save
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             
             <h2 className="text-2xl font-bold text-gray-800 mb-6">Generated Document</h2>
             
             {isDocumentGenerated ? (
-              <div className="custom-scrollbar max-h-96 overflow-y-auto">
-                <pre className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
-                  {generatedDocument}
-                </pre>
-              </div>
+              isEditing ? (
+                <textarea
+                  value={generatedDocument}
+                  onChange={(e) => setGeneratedDocument(e.target.value)}
+                  className="w-full h-96 p-4 border border-gray-300 rounded-lg resize-none text-sm font-mono"
+                  placeholder="Edit your document here..."
+                />
+              ) : (
+                <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg bg-gray-50">
+                  <div id="generated-document-content" className="p-6 bg-white m-1 rounded-lg shadow-sm">
+                    <ReactMarkdown
+                      rehypePlugins={[rehypeRaw]}
+                      components={{
+                        // Headings with proper styling
+                        h1: ({ children }) => (
+                          <h1 className="text-3xl font-bold text-gray-900 mb-6 pb-2 border-b-2 border-gray-200">
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-2xl font-bold text-gray-800 mb-4 mt-8 pb-1 border-b border-gray-200">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-xl font-bold text-gray-700 mb-3 mt-6">
+                            {children}
+                          </h3>
+                        ),
+                        h4: ({ children }) => (
+                          <h4 className="text-lg font-bold text-gray-700 mb-2 mt-4">
+                            {children}
+                          </h4>
+                        ),
+                        h5: ({ children }) => (
+                          <h5 className="text-base font-bold text-gray-600 mb-2 mt-3">
+                            {children}
+                          </h5>
+                        ),
+                        h6: ({ children }) => (
+                          <h6 className="text-sm font-bold text-gray-600 mb-2 mt-3">
+                            {children}
+                          </h6>
+                        ),
+                        // Paragraphs with proper spacing
+                        p: ({ children }) => (
+                          <p className="text-gray-700 mb-4 leading-relaxed">
+                            {children}
+                          </p>
+                        ),
+                        // Lists with better styling
+                        ul: ({ children }) => (
+                          <ul className="list-disc list-inside mb-4 ml-4 space-y-1">
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal list-inside mb-4 ml-4 space-y-1">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className="text-gray-700 leading-relaxed">
+                            {children}
+                          </li>
+                        ),
+                        // Code blocks
+                        code: ({ inline, children }) => (
+                          inline ? (
+                            <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono text-gray-800">
+                              {children}
+                            </code>
+                          ) : (
+                            <code className="block bg-gray-100 p-3 rounded-lg text-sm font-mono text-gray-800 overflow-x-auto mb-4">
+                              {children}
+                            </code>
+                          )
+                        ),
+                        pre: ({ children }) => (
+                          <pre className="bg-gray-100 p-4 rounded-lg mb-4 overflow-x-auto">
+                            {children}
+                          </pre>
+                        ),
+                        // Blockquotes
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-4 border-gray-300 pl-4 py-2 mb-4 italic text-gray-600 bg-gray-50 rounded-r-lg">
+                            {children}
+                          </blockquote>
+                        ),
+                        // Tables
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto mb-4">
+                            <table className="min-w-full border border-gray-300 rounded-lg">
+                              {children}
+                            </table>
+                          </div>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-gray-100">
+                            {children}
+                          </thead>
+                        ),
+                        th: ({ children }) => (
+                          <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-700">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="border border-gray-300 px-4 py-2 text-gray-700">
+                            {children}
+                          </td>
+                        ),
+                        // Images
+                        img: ({ node, ...props }) => <CustomImage {...props} />,
+                        // Strong and emphasis
+                        strong: ({ children }) => (
+                          <strong className="font-bold text-gray-900">
+                            {children}
+                          </strong>
+                        ),
+                        em: ({ children }) => (
+                          <em className="italic text-gray-700">
+                            {children}
+                          </em>
+                        ),
+                        // Horizontal rules
+                        hr: () => (
+                          <hr className="border-t-2 border-gray-200 my-8" />
+                        ),
+                      }}
+                    >
+                      {generatedDocument}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="text-gray-500 text-center py-12">
-                {backendStatus !== 'connected' 
-                  ? 'Backend not connected. Please start the backend server.'
-                  : 'Generated document will appear here'
-                }
+                {backendStatus !== "connected"
+                  ? "Backend not connected. Please start the backend server."
+                  : "Generated document will appear here"}
               </div>
             )}
 
-            {/* Review Comments */}
-            <div className="mt-6">
+            {/* <div className="mt-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Provide your review comments to regenerate
               </label>
@@ -327,11 +510,11 @@ function App() {
                 value={reviewComments}
                 onChange={(e) => setReviewComments(e.target.value)}
                 placeholder="Enter feedback here"
-                className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none"
               />
-            </div>
+            </div> */}
 
-            <button className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded border border-blue-500">
+            <button className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
               Back to Services
             </button>
           </div>

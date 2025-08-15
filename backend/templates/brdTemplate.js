@@ -1,56 +1,56 @@
 const brdTemplate = `
-# Business Requirements Document (BRD)
+#Business Requirements Document (BRD)
 
-## 1. Document Control
+ ## 1. Document Control
 - Version History
 - Document Status
 - Authors & Reviewers
 - Approval Table
 
-## 2. Executive Summary
+##  2. Executive Summary
 - Brief overview of the business need
 - Purpose of the project or solution
 
-## 3. Business Objectives
+ ## 3. Business Objectives
 - High-level business goals
 - Key performance indicators (KPIs)
 
-## 4. Project Scope
+ ## 4. Project Scope
 - In-Scope: What will be included
 - Out-of-Scope: What is excluded
 
-## 5. Business Requirements
+##  5. Business Requirements
 - Enumerated list of business needs
   - Each with:
     - ID (e.g., BR-01)
     - Description
     - Priority (High/Medium/Low)
 
-## 6. Stakeholder Identification
+ ## 6. Stakeholder Identification
 - List of all stakeholders
   - Role
   - Department
   - Contact Info
   - Level of involvement (e.g., decision maker, end-user)
 
-## 7. Current State Analysis (As-Is)
+ ## 7. Current State Analysis (As-Is)
 - Overview of current processes
 - Pain points or inefficiencies
 
-## 8. Proposed Solution (To-Be)
+ ## 8. Proposed Solution (To-Be)
 - Description of the new solution or improvements
 - How it aligns with business goals
 
-## 9. Business Process Flows
+##  9. Business Process Flows
 - Diagrams/Flowcharts (e.g., BPMN or swimlane diagrams)
 - Before and after scenarios
 
-## 10. Assumptions, Dependencies & Constraints
+ ## 10. Assumptions, Dependencies & Constraints
 - Assumptions made during requirements gathering
 - External dependencies (e.g., 3rd party systems)
 - Constraints (e.g., budget, timeline, regulatory)
 
-## 11. Risks & Mitigation Plans
+ ## 11. Risks & Mitigation Plans
 - Identified risks
 - Probability/Impact
 - Mitigation strategies
