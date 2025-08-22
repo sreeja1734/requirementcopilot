@@ -3,6 +3,8 @@ import rehypeRaw from 'rehype-raw';
 import Login from './Login';
 import { api, uploadFile, getDocumentType } from './api';
 import ReactMarkdown from "react-markdown";
+import htmlDocx from 'html-docx-js/dist/html-docx';
+import html2pdf from "html2pdf.js";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -10,7 +12,7 @@ function App() {
   const [selectedMenu, setSelectedMenu] = useState('Generate BRD');
   const [context, setContext] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [reviewComments, setReviewComments] = useState('');
+  //const [reviewComments, setReviewComments] = useState('');
   const [generatedDocument, setGeneratedDocument] = useState('');
   const [isDocumentGenerated, setIsDocumentGenerated] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -26,6 +28,44 @@ function App() {
     'Generate SRS',
     'Generate User Stories'
   ];
+
+  const downloadAsDocx = () => {
+    const element = document.getElementById('generated-document-content');
+    if (!element) return;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8"/>
+          <title>Document</title>
+        </head>
+        <body>
+          ${element.innerHTML}
+        </body>
+      </html>
+    `;
+    const docxBlob = htmlDocx.asBlob(html);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(docxBlob);
+    link.download = 'generated-document.docx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadAsPdf = () => {
+    const element = document.getElementById('generated-document-content');
+    if (!element) return;
+    html2pdf()
+      .set({
+        margin: 0.5,
+        filename: 'generated-document.pdf',
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      })
+      .from(element)
+      .save();
+  };
 
   const CustomImage = ({ src, alt }) => {
     return <img src={src} alt={alt} style={{ maxWidth: "100%" }} />;
@@ -59,7 +99,7 @@ function App() {
   const clearAllContent = () => {
     setContext('');
     setUploadedFiles([]);
-    setReviewComments('');
+    //setReviewComments('');
     setGeneratedDocument('');
     setIsDocumentGenerated(false);
     setError('');
@@ -351,6 +391,20 @@ function App() {
                       💾 Save
                     </button>
                   )}
+                  <button
+                  onClick={downloadAsDocx}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                  title="Download as DOCX"
+                >
+                  DOCX
+                </button>
+                <button
+                  onClick={downloadAsPdf}
+                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                  title="Download as PDF"
+                >
+                  PDF
+                </button>
                 </div>
               </div>
             )}
