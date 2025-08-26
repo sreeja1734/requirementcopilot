@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import rehypeRaw from 'rehype-raw'; 
 import Login from './Login';
-import { api, uploadFile, getDocumentType } from './api';
+import { api, uploadFile, getDocumentType, regenerateDocument } from './api';
 import ReactMarkdown from "react-markdown";
 import htmlDocx from 'html-docx-js/dist/html-docx';
 import html2pdf from "html2pdf.js";
@@ -17,10 +17,11 @@ function App() {
   const [isDocumentGenerated, setIsDocumentGenerated] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false); // Add this state
+  const [currentDocumentId, setCurrentDocumentId] = useState(null); // Add this state
   const [error, setError] = useState('');
   const [backendStatus, setBackendStatus] = useState('checking');
   const [isEditing, setIsEditing] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
 
   const menuItems = [
     'Generate BRD',
@@ -53,22 +54,105 @@ function App() {
     document.body.removeChild(link);
   };
 
-  const downloadAsPdf = () => {
+  const downloadAsPdf = async () => {
     const element = document.getElementById('generated-document-content');
     if (!element) return;
-    html2pdf()
-      .set({
-        margin: 0.5,
-        filename: 'generated-document.pdf',
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-      })
-      .from(element)
-      .save();
+    
+    // Convert all images to base64 to ensure they're included in PDF
+    const images = element.querySelectorAll('img');
+    const imagePromises = Array.from(images).map(img => {
+      return new Promise((resolve) => {
+        if (img.src.startsWith('data:')) {
+          // Already base64, no conversion needed
+          resolve();
+          return;
+        }
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const image = new Image();
+        
+        image.crossOrigin = 'anonymous';
+        image.onload = () => {
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          ctx.drawImage(image, 0, 0);
+          
+          try {
+            const dataURL = canvas.toDataURL('image/png');
+            img.src = dataURL;
+          } catch (e) {
+            console.warn('Could not convert image to base64:', e);
+          }
+          resolve();
+        };
+        
+        image.onerror = () => {
+          console.warn('Could not load image for PDF:', img.src);
+          resolve();
+        };
+        
+        image.src = img.src;
+      });
+    });
+    
+    try {
+      // Wait for all images to be converted
+      await Promise.all(imagePromises);
+      
+      // Add a small delay to ensure DOM updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      html2pdf()
+        .set({
+          margin: 0.5,
+          filename: 'generated-document.pdf',
+          html2canvas: { 
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            scrollX: 0,
+            scrollY: 0,
+            width: element.scrollWidth,
+            height: element.scrollHeight
+          },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        })
+        .from(element)
+        .save();
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      // Fallback to original method if conversion fails
+      html2pdf()
+        .set({
+          margin: 0.5,
+          filename: 'generated-document.pdf',
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        })
+        .from(element)
+        .save();
+    }
   };
 
   const CustomImage = ({ src, alt }) => {
-    return <img src={src} alt={alt} style={{ maxWidth: "100%" }} />;
+    return (
+      <img 
+        src={src} 
+        alt={alt} 
+        style={{ 
+          maxWidth: "100%", 
+          height: "auto",
+          display: "block",
+          margin: "10px 0"
+        }}
+        crossOrigin="anonymous"
+        onError={(e) => {
+          console.warn('Image failed to load:', src);
+          e.target.style.display = 'none';
+        }}
+      />
+    );
   };
 
   useEffect(() => {
@@ -102,6 +186,7 @@ function App() {
     //setReviewComments('');
     setGeneratedDocument('');
     setIsDocumentGenerated(false);
+    setCurrentDocumentId(null); // Clear document ID
     setError('');
   };
 
@@ -173,6 +258,7 @@ function App() {
       
       setGeneratedDocument(result.generatedContent);
       setIsDocumentGenerated(true);
+      setCurrentDocumentId(documentId); // Store the document ID for regeneration
       setError('');
     } catch (error) {
       setError(error.message);
@@ -182,65 +268,42 @@ function App() {
     }
   };
 
+  // Add the regenerate function
+  const handleRegenerate = async () => {
+    if (!currentDocumentId) {
+      setError('No document to regenerate. Please generate a document first.');
+      return;
+    }
+
+    setIsRegenerating(true);
+    setError('');
+
+    try {
+      const result = await regenerateDocument(currentDocumentId); // Use the imported function directly
+      
+      setGeneratedDocument(result.generatedContent);
+      setError('');
+      
+      // Show success message briefly
+      const successMessage = 'Document regenerated successfully with new content!';
+      setError(''); // Clear any previous errors
+      
+      // You could also show a success notification here
+      console.log('Document regenerated successfully');
+      
+    } catch (error) {
+      setError(`Regeneration failed: ${error.message}`);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const handleEditDocument = () => {
     setIsEditing(true);
   };
 
   const handleSaveDocument = () => {
     setIsEditing(false);
-  };
-
-  const handleCopyDocument = async () => {
-    try {
-      // Get the rendered document content
-      const documentElement = document.getElementById('generated-document-content');
-      
-      if (documentElement) {
-        // Create a range and selection to copy the formatted content
-        const range = document.createRange();
-        range.selectNodeContents(documentElement);
-        
-        // Try modern clipboard API with both HTML and plain text
-        if (navigator.clipboard && window.ClipboardItem) {
-          const htmlBlob = new Blob([documentElement.outerHTML], { type: 'text/html' });
-          const textBlob = new Blob([documentElement.innerText], { type: 'text/plain' });
-          
-          const clipboardItem = new ClipboardItem({
-            'text/html': htmlBlob,
-            'text/plain': textBlob
-          });
-          
-          await navigator.clipboard.write([clipboardItem]);
-        } else {
-          // Fallback: use selection API
-          const selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(range);
-          
-          // Copy the selected content (maintains formatting in most apps)
-          document.execCommand('copy');
-          selection.removeAllRanges();
-        }
-        
-        setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2000);
-      } else {
-        // Fallback to markdown text if element not found
-        await navigator.clipboard.writeText(generatedDocument);
-        setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2000);
-      }
-    } catch (error) {
-      console.error('Failed to copy formatted document:', error);
-      // Final fallback - copy as plain text
-      try {
-        await navigator.clipboard.writeText(generatedDocument);
-        setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2000);
-      } catch (fallbackError) {
-        console.error('All copy methods failed:', fallbackError);
-      }
-    }
   };
 
   if (!isAuthenticated) {
@@ -365,17 +428,6 @@ function App() {
               <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 flex justify-between items-center">
                 <span>Document generated successfully</span>
                 <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handleCopyDocument}
-                    className={`px-3 py-1 rounded text-sm transition-colors ${
-                      copySuccess 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-gray-500 hover:bg-gray-600 text-white'
-                    }`}
-                    title="Copy document to clipboard"
-                  >
-                    {copySuccess ? '✓ Copied!' : '📋 Copy'}
-                  </button>
                   {!isEditing ? (
                     <button
                       onClick={handleEditDocument}
@@ -568,9 +620,27 @@ function App() {
               />
             </div> */}
 
-            <button className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
-              Back to Services
-            </button>
+            {/* Updated button section with regenerate button */}
+            <div className="mt-4 flex space-x-3">
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                Back to Services
+              </button>
+              
+              {/* Regenerate button - only show if document is generated */}
+              {isDocumentGenerated && (
+                <button
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating || backendStatus !== 'connected'}
+                  className={`px-4 py-2 rounded text-white font-medium ${
+                    isRegenerating || backendStatus !== 'connected'
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

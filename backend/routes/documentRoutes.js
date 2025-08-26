@@ -8,31 +8,25 @@ const userStoryTemplate = require('../templates/userStoryTemplate');
 const axios = require('axios');
 const plantumlEncoder = require('plantuml-encoder');
 const { extractTextFromFile } = require('../utils/fileExtractors');
+// const { generateDocumentPrompt } = require('../utils/prompt.js');
+const { generateDocumentPrompt, regenPrompt } = require('../utils/prompt.js');
 
-// Helper to validate and fix template structure
 function validateAndFixTemplateStructure(content, template, docType) {
-  // Validate input parameters
   if (!content || typeof content !== 'string') {
     throw new Error('Invalid content provided to validateAndFixTemplateStructure');
-  }
-  
+  }  
   if (!template || typeof template !== 'string') {
     throw new Error('Invalid template provided to validateAndFixTemplateStructure');
   }
-  
   if (!docType || typeof docType !== 'string') {
     throw new Error('Invalid docType provided to validateAndFixTemplateStructure');
   }
-
-  // Extract section headings from template (tolerate leading spaces before ##)
   const templateSections = [];
   const sectionRegex = /^\s*##\s+(.+)$/gm;
   let match;
   while ((match = sectionRegex.exec(template)) !== null) {
     templateSections.push(match[1].trim());
   }
-
-  // Extract all possible heading styles from content (## Section, **Section**, # Section)
   const headingRegex = /^(##\s+|\*\*|#\s*)([\w\d .\-()]+)(\*\*|)$/gm;
   const contentSections = [];
   let contentMatch;
@@ -42,20 +36,14 @@ function validateAndFixTemplateStructure(content, template, docType) {
       index: contentMatch.index
     });
   }
-
-  // Helper to extract content for a specific section (by heading)
   function extractSectionContentFlexible(content, sectionName) {
     console.log(`[extractSectionContentFlexible] Looking for section: "${sectionName}"`);
-    
-    // Try a much simpler approach - just split by sections (tolerate leading spaces before ##)
     const sections = content.split(/\n\s*##\s+/);
     console.log(`[extractSectionContentFlexible] Found ${sections.length} sections`);
-    
     for (let i = 1; i < sections.length; i++) { // Skip first section (title)
       const section = sections[i];
       const lines = section.split('\n');
       const heading = lines[0].trim();
-      
       console.log(`[extractSectionContentFlexible] Checking section: "${heading}"`);
       
       if (heading === sectionName) {
@@ -63,13 +51,10 @@ function validateAndFixTemplateStructure(content, template, docType) {
         console.log(`[extractSectionContentFlexible] FOUND! Content length: ${content.length}`);
         return content;
       }
-    }
-    
+    }    
     console.log(`[extractSectionContentFlexible] Section not found`);
     return null;
   }
-
-  // Always reconstruct the output to match the template
   let fixedContent = `# ${docType === 'BRD' ? 'Business Requirements Document (BRD)' : 
                       docType === 'SRS' ? 'Software Requirements Specification (SRS)' :
                       docType === 'FRS' ? 'Functional Requirements Specification (FRS)' :
@@ -130,7 +115,6 @@ router.post('/:id/generate', async (req, res) => {
     case 'UserStory': template = userStoryTemplate; break;
     default: return res.status(400).json({ error: 'Invalid docType' });
   }
-
   let userInput = '';
   let extractedText = '';
   
@@ -153,210 +137,7 @@ router.post('/:id/generate', async (req, res) => {
     return res.status(400).json({ error: 'Invalid document type or missing content' });
   }
 
-// Enhanced prompt with use case generation
-// Enhanced prompt that generates HTML tables instead of markdown tables
-const prompt = `
-You are an expert requirements engineer tasked with generating a comprehensive ${docType} document with detailed use cases.
-
-CRITICAL INSTRUCTIONS:
-1. You MUST use the EXACT template structure provided below
-2. You MUST include ALL section headings in the EXACT order shown in the template
-3. You MUST NOT add, remove, or modify any section titles
-4. You MUST NOT create your own document structure
-5. You MUST follow the template format precisely
-
-TABLE FORMATTING RULES - VERY IMPORTANT:
-- DO NOT use markdown tables with pipes (|) and dashes
-- ALWAYS use HTML tables with proper <table>, <tr>, <th>, <td> tags
-- HTML tables will render as proper formatted tables
-- Each table MUST be standalone with proper HTML structure
-
-CORRECT HTML TABLE FORMAT (ALWAYS USE THIS):
-<table>
-<thead>
-<tr>
-<th>Column 1</th>
-<th>Column 2</th>
-<th>Column 3</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Value 1</td>
-<td>Value 2</td>
-<td>Value 3</td>
-</tr>
-<tr>
-<td>Value 4</td>
-<td>Value 5</td>
-<td>Value 6</td>
-</tr>
-</tbody>
-</table>
-
-DO NOT USE MARKDOWN TABLES (FORBIDDEN):
-| Column 1 | Column 2 | Column 3 |
-|----------|----------|----------|
-| Value 1  | Value 2  | Value 3  |
-
-USE CASE GENERATION REQUIREMENTS:
-- For EVERY significant functionality mentioned in the document, generate a detailed use case
-- Each use case MUST include proper HTML table formatting
-- Generate AT LEAST 5-10 use cases based on the document content
-
-USE CASE SUMMARY HTML TABLE EXAMPLE:
-<table>
-<thead>
-<tr>
-<th>Use Case ID</th>
-<th>Use Case Name</th>
-<th>Primary Actor</th>
-<th>Priority</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>UC-01</td>
-<td>User Login</td>
-<td>End User</td>
-<td>High</td>
-</tr>
-<tr>
-<td>UC-02</td>
-<td>Create Task</td>
-<td>End User</td>
-<td>High</td>
-</tr>
-<tr>
-<td>UC-03</td>
-<td>Edit Task</td>
-<td>End User</td>
-<td>Medium</td>
-</tr>
-</tbody>
-</table>
-
-VERSION HISTORY HTML TABLE EXAMPLE:
-<table>
-<thead>
-<tr>
-<th>Version</th>
-<th>Date</th>
-<th>Author</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1.0</td>
-<td>2024-10-27</td>
-<td>Requirements Engineer</td>
-<td>Initial draft</td>
-</tr>
-</tbody>
-</table>
-
-BUSINESS REQUIREMENTS HTML TABLE EXAMPLE:
-<table>
-<thead>
-<tr>
-<th>ID</th>
-<th>Description</th>
-<th>Priority</th>
-<th>Status</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>BR-01</td>
-<td>Add new tasks</td>
-<td>High</td>
-<td>Active</td>
-</tr>
-<tr>
-<td>BR-02</td>
-<td>Edit existing tasks</td>
-<td>High</td>
-<td>Active</td>
-</tr>
-<tr>
-<td>BR-03</td>
-<td>Mark tasks as complete</td>
-<td>High</td>
-<td>Active</td>
-</tr>
-</tbody>
-</table>
-
-PLANTUML DIAGRAM REQUIREMENTS:
-- Include use case diagrams using PlantUML
-- Include system flow diagrams
-- Include process flow diagrams where applicable
-
-USE CASE DIAGRAM EXAMPLE:
-\`\`\`plantuml
-@startuml
-actor User
-actor Admin
-
-User --> (Login)
-User --> (Create Task)
-User --> (Edit Task)
-User --> (Delete Task)
-User --> (Mark Complete)
-
-Admin --> (Manage Users)
-Admin --> (System Configuration)
-
-(Login) .> (Validate Credentials) : include
-(Create Task) .> (Save to Database) : include
-@enduml
-\`\`\`
-
-SYSTEM FLOW DIAGRAM EXAMPLE:
-\`\`\`plantuml
-@startuml
-start
-:User Action;
-:System Processing;
-if (Valid Input?) then (yes)
-  :Execute Function;
-  :Update Database;
-  :Return Success;
-else (no)
-  :Show Error Message;
-endif
-:End Process;
-stop
-@enduml
-\`\`\`
-
-DOCUMENT-SPECIFIC USE CASE GUIDELINES:
-- **BRD**: Focus on business process use cases, stakeholder interactions
-- **SRS**: Focus on system functionality use cases, user interactions with software
-- **FRS**: Focus on detailed functional use cases, API interactions, data processing
-- **User Stories**: Convert each user story into detailed use cases with acceptance criteria
-
-IMPORTANT REMINDERS:
-1. NEVER use markdown table syntax with pipes (|) and dashes (-)
-2. ALWAYS use HTML table tags (<table>, <thead>, <tbody>, <tr>, <th>, <td>)
-3. Each HTML table must be complete with proper opening and closing tags
-4. Include proper table headers using <th> tags
-5. Use <tbody> for table body content
-6. For sections requiring tables, include at least one HTML table
-7. For sections requiring diagrams, include at least one PlantUML diagram in a code block
-8. If a section has no content, write "Not specified" under that section heading
-9. Do NOT summarize or critique the input - produce ONLY the formal document
-10. Generate comprehensive use cases based on the document content and context
-
-TEMPLATE TO FOLLOW EXACTLY:
-${template}
-
-USER INPUT TO PROCESS:
-${userInput}
-
-Remember: Your output must match the template structure exactly, with all sections in the same order and format as shown in the template above. Use HTML tables ONLY - no markdown tables with pipes and dashes. Generate detailed use cases that reflect the actual functionality described in the uploaded document.
-`;
+const prompt = generateDocumentPrompt(docType, template, userInput);
 
   try {
     console.log('[DEBUG] Sending prompt to LLM service...');
@@ -385,7 +166,6 @@ Remember: Your output must match the template structure exactly, with all sectio
     
     let generatedContent = llmRes.data.doc;
     
-    // Additional validation for generated content
     if (typeof generatedContent !== 'string' || generatedContent.trim().length === 0) {
       throw new Error('LLM service returned empty or invalid document content');
     }
@@ -395,10 +175,9 @@ Remember: Your output must match the template structure exactly, with all sectio
     console.log(generatedContent);
     console.log('=== END OF LLM CONTENT ===');
 
-    // Validate and fix template structure if needed
     generatedContent = validateAndFixTemplateStructure(generatedContent, template, docType);
 
-    // ✅ STEP 1: First, extract PlantUML code blocks BEFORE modifying content
+    //  STEP 1: First, extract PlantUML code blocks BEFORE modifying content
     const plantUmlBlocks = [];
     const plantUmlRegex = /```plantuml([\s\S]*?)```/g;
     let match;
@@ -408,7 +187,7 @@ Remember: Your output must match the template structure exactly, with all sectio
 
     console.log(`[DEBUG] Found ${plantUmlBlocks.length} PlantUML diagrams`);
 
-    // ✅ STEP 2: Generate PlantUML image URLs and diagram info
+    // sTEP 2: Generate PlantUML image URLs and diagram info
 const diagramUrls = plantUmlBlocks.map((code, index) => {
   try {
     const encoded = plantumlEncoder.encode(code.trim());
@@ -432,19 +211,19 @@ const diagramUrls = plantUmlBlocks.map((code, index) => {
   }
 });
 
-// ✅ STEP 3: Now replace PlantUML code blocks with image markdown
+//  STEP 3: Now replace PlantUML code blocks with image markdown
 generatedContent = generatedContent.replace(/```plantuml([\s\S]*?)```/g, (match, code) => {
   try {
     const encoded = plantumlEncoder.encode(code.trim());
-    // FIXED: Changed from HTTP to HTTPS
+
     return `![PlantUML Diagram](https://www.plantuml.com/plantuml/png/${encoded})`;
   } catch (e) {
     console.error('Failed to encode PlantUML block:', e);
-    return match; // fall back to original code block if encoding fails
+    return match; 
   }
 });
 
-// ✅ STEP 4: Add debugging to verify the transformation
+//  STEP 4: Add debugging to verify the transformation
 console.log('[DEBUG] Content after PlantUML transformation:', generatedContent.substring(0, 500));
 console.log('[DEBUG] Number of image markdown tags found:', (generatedContent.match(/!\[PlantUML Diagram\]/g) || []).length);
 
@@ -530,5 +309,262 @@ console.log('[DEBUG] Number of image markdown tags found:', (generatedContent.ma
   }
 });
 
+router.post('/:id/regenerate', async (req, res) => {
+  const { id } = req.params;
+  let doc;
+  
+  try {
+    doc = await Document.findById(id);
+  } catch (err) {
+    console.error('Invalid document id:', err);
+    return res.status(400).json({ error: 'Invalid document id', details: err.message });
+  }
+  
+  if (!doc) return res.status(404).json({ error: 'Document not found' });
+  
+  if (!doc.generatedContent || !doc.docType) {
+    return res.status(400).json({ 
+      error: 'Document must be generated first before regeneration',
+      details: 'Use the generate endpoint first to create initial document content'
+    });
+  }
+
+  // Get the existing docType and template
+  const docType = doc.docType;
+  let template;
+  switch (docType) {
+    case 'SRS': template = srsTemplate; break;
+    case 'BRD': template = brdTemplate; break;
+    case 'FRS': template = frsTemplate; break;
+    case 'UserStory': template = userStoryTemplate; break;
+    default: return res.status(400).json({ error: 'Invalid docType in existing document' });
+  }
+
+  // Reconstruct original user input
+  let userInput = '';
+  let extractedText = '';
+  
+  if (doc.inputType === 'text' && doc.text) {
+    // Handle text-only input
+    userInput = doc.text;
+  } else if ((doc.inputType === 'document' || doc.inputType === 'image') && doc.filePath) {
+    // Handle file input
+    extractedText = await extractTextFromFile(doc.filePath, doc.inputType);
+    if (extractedText && extractedText.trim().length > 0) {
+      userInput = `Below is the full content of an uploaded ${doc.inputType} (file: ${doc.originalName}):\n\n${extractedText}\n\nPlease regenerate a complete ${docType} using the provided template with DIFFERENT content and approach. The document must include all template sections, and for sections requiring diagrams or tables, always include at least one PlantUML diagram (in a code block) and one Markdown table (in a code block), but make them DIFFERENT from the previous version. Do not summarize or critique the content—produce a formal ${docType} document only with alternative perspectives and examples.`;
+    } else {
+      userInput = `Below is the full content of an uploaded ${doc.inputType} (file: ${doc.originalName}). No extractable text was found. Please regenerate a complete ${docType} using the provided template with DIFFERENT content and approach. The document must include all template sections, and for sections requiring diagrams or tables, always include at least one PlantUML diagram (in a code block) and one Markdown table (in a code block), but make them DIFFERENT from the previous version. Do not summarize or critique the content—produce a formal ${docType} document only with alternative perspectives and examples.`;
+    }
+    // Add any additional text context if provided
+    if (doc.text && doc.text.trim().length > 0) {
+      userInput += `\n\nUser query: ${doc.text}`;
+    }
+  } else {
+    return res.status(400).json({ error: 'Invalid document type or missing content' });
+  }
+
+  // Use the regeneration prompt with previous content for variation
+  const prompt = regenPrompt(docType, template, userInput, doc.generatedContent);
+
+  try {
+    console.log('[DEBUG] Sending regeneration prompt to LLM service...');
+    console.log('[DEBUG] Regeneration prompt length:', prompt.length);
+    console.log('[DEBUG] Document type:', docType);
+    console.log('[DEBUG] Previous content length:', doc.generatedContent?.length || 0);
+    
+    const llmRes = await axios.post(
+      'http://localhost:8000/generate-doc',
+      { prompt },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    
+    console.log('[DEBUG] LLM regeneration response received');
+    console.log('[DEBUG] Response status:', llmRes.status);
+    
+    // Check if LLM service returned an error
+    if (llmRes.data.error) {
+      throw new Error(`LLM service error: ${llmRes.data.error}`);
+    }
+    
+    // Validate LLM response
+    if (!llmRes.data || !llmRes.data.doc) {
+      throw new Error('LLM service returned invalid response: No document content received');
+    }
+    
+    let generatedContent = llmRes.data.doc;
+    
+    if (typeof generatedContent !== 'string' || generatedContent.trim().length === 0) {
+      throw new Error('LLM service returned empty or invalid document content');
+    }
+    
+    console.log('[DEBUG] Raw LLM regeneration content before validation:');
+    console.log('=== START OF REGENERATED LLM CONTENT ===');
+    console.log(generatedContent.substring(0, 500) + '...');
+    console.log('=== END OF REGENERATED LLM CONTENT PREVIEW ===');
+
+    generatedContent = validateAndFixTemplateStructure(generatedContent, template, docType);
+
+    // Extract PlantUML code blocks BEFORE modifying content
+    const plantUmlBlocks = [];
+    const plantUmlRegex = /```plantuml([\s\S]*?)```/g;
+    let match;
+    while ((match = plantUmlRegex.exec(generatedContent)) !== null) {
+      plantUmlBlocks.push(match[1].trim());
+    }
+
+    console.log(`[DEBUG] Found ${plantUmlBlocks.length} PlantUML diagrams in regenerated content`);
+
+    // Generate PlantUML image URLs and diagram info
+    const diagramUrls = plantUmlBlocks.map((code, index) => {
+      try {
+        const encoded = plantumlEncoder.encode(code.trim());
+        const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
+        console.log(`[DEBUG] Generated regenerated diagram URL ${index + 1}:`, url);
+        return {
+          id: index,
+          code: code,
+          url: url,
+          encodedUrl: encoded
+        };
+      } catch (err) {
+        console.error(`[DEBUG] Error encoding regenerated PlantUML diagram ${index + 1}:`, err);
+        return {
+          id: index,
+          code: code,
+          url: null,
+          error: err.message
+        };
+      }
+    });
+
+    // Replace PlantUML code blocks with image markdown
+    generatedContent = generatedContent.replace(/```plantuml([\s\S]*?)```/g, (match, code) => {
+      try {
+        const encoded = plantumlEncoder.encode(code.trim());
+        return `![PlantUML Diagram](https://www.plantuml.com/plantuml/png/${encoded})`;
+      } catch (e) {
+        console.error('Failed to encode PlantUML block:', e);
+        return match; 
+      }
+    });
+
+    console.log('[DEBUG] Regenerated content after PlantUML transformation:', generatedContent.substring(0, 500));
+
+    // Extract Markdown tables (both in code blocks and regular markdown)
+    const markdownTables = [];
+    const parsedTables = [];
+    
+    // Find tables in code blocks
+    const codeBlockTableRegex = /```(?:markdown)?\s*\|[\s\S]*?\|[\s\S]*?```/g;
+    let tableMatch;
+    while ((tableMatch = codeBlockTableRegex.exec(generatedContent)) !== null) {
+      const md = tableMatch[0].replace(/```(?:markdown)?/,'').replace(/```/,'').trim();
+      markdownTables.push(md);
+      parsedTables.push(parseMarkdownTable(md));
+    }
+    
+    // Find regular markdown tables (not in code blocks)
+    const regularTableRegex = /(?<!```)[\|][\s\S]*?[\|][\s\S]*?[\|](?!```)/g;
+    while ((tableMatch = regularTableRegex.exec(generatedContent)) !== null) {
+      const md = tableMatch[0].trim();
+      if (!markdownTables.includes(md)) {
+        markdownTables.push(md);
+        parsedTables.push(parseMarkdownTable(md));
+      }
+    }
+    
+    console.log(`[DEBUG] Found ${markdownTables.length} tables in the regenerated document`);
+
+    // Store the previous version in history (optional - you can implement version history)
+    const previousVersion = {
+      content: doc.generatedContent,
+      generatedAt: doc.updatedAt,
+      version: doc.version || 1
+    };
+
+    // Update document with regenerated content
+    doc.generatedContent = generatedContent;
+    doc.parsedTables = parsedTables;
+    doc.diagramUrls = diagramUrls;
+    doc.plantUmlBlocks = plantUmlBlocks;
+    doc.version = (doc.version || 1) + 1; // Increment version
+    doc.regeneratedAt = new Date(); // Track regeneration time
+    
+    await doc.save();
+
+    console.log(`[DEBUG] Document regenerated and saved with ${diagramUrls.length} diagrams and ${parsedTables.length} tables`);
+    console.log(`[DEBUG] New version: ${doc.version}`);
+
+    res.json({ 
+      success: true,
+      message: 'Document successfully regenerated with new content',
+      generatedContent,
+      parsedTables, 
+      diagrams: diagramUrls,
+      plantUmlBlocks: plantUmlBlocks,
+      diagramCount: plantUmlBlocks.length,
+      tableCount: parsedTables.length,
+      version: doc.version,
+      regeneratedAt: doc.regeneratedAt,
+      document: doc 
+    });
+    
+  } catch (err) {
+    console.error('Error in document regeneration:', err);
+    
+    // Check if it's an LLM service error
+    if (err.code === 'ECONNREFUSED' || err.message.includes('connect')) {
+      return res.status(503).json({ 
+        error: 'LLM service unavailable', 
+        details: 'Please ensure the Python LLM service is running on port 8000',
+        solution: 'Run: python start_llm_service.py'
+      });
+    }
+    
+    // Check if it's an API key error
+    if (err.response && err.response.data && err.response.data.error) {
+      return res.status(500).json({ 
+        error: 'LLM service error', 
+        details: err.response.data.error 
+      });
+    }
+    
+    // Check if it's a validation error
+    if (err.message.includes('Invalid content') || err.message.includes('LLM service returned')) {
+      return res.status(500).json({ 
+        error: 'Document regeneration failed', 
+        details: err.message,
+        solution: 'Check LLM service configuration and API keys'
+      });
+    }
+    
+    res.status(500).json({ error: 'Document regeneration failed', details: err.message });
+  }
+});
+
+router.get('/:id/versions', async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const doc = await Document.findById(id);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    
+    const versionInfo = {
+      currentVersion: doc.version || 1,
+      generatedAt: doc.createdAt,
+      regeneratedAt: doc.regeneratedAt || null,
+      docType: doc.docType,
+      hasContent: !!doc.generatedContent,
+      contentLength: doc.generatedContent?.length || 0,
+      diagramCount: doc.plantUmlBlocks?.length || 0,
+      tableCount: doc.parsedTables?.length || 0
+    };
+    
+    res.json(versionInfo);
+  } catch (err) {
+    console.error('Error fetching version info:', err);
+    res.status(500).json({ error: 'Failed to fetch version information', details: err.message });
+  }
+});
 
 module.exports = router;

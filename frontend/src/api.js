@@ -73,6 +73,32 @@ export const api = {
     return response.json();
   },
 
+  // Regenerate document
+  regenerateDocument: async (documentId) => {
+    try {
+      console.log(`[API] Regenerating document ${documentId}`);
+      
+      const response = await fetch(`${API_BASE_URL}/documents/${documentId}/regenerate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`[API] Document regenerated successfully`);
+      return data;
+    } catch (error) {
+      console.error('[API] Regeneration error:', error);
+      throw error;
+    }
+  },
+
   // Check if backend is available
   checkBackendHealth: async () => {
     try {
@@ -109,9 +135,11 @@ export const getDocumentType = (menuItem) => {
     case 'Generate SRS':
       return 'SRS';
     case 'Generate User Stories':
-   
       return 'UserStory';
     default:
       return 'BRD';
   }
-}; 
+};
+
+// Export regenerateDocument as a standalone function for easier import
+export const regenerateDocument = api.regenerateDocument;
