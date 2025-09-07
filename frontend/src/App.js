@@ -608,23 +608,11 @@ function App() {
               </div>
             )}
 
-            {/* <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Provide your review comments to regenerate
-              </label>
-              <textarea
-                value={reviewComments}
-                onChange={(e) => setReviewComments(e.target.value)}
-                placeholder="Enter feedback here"
-                className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none"
-              />
-            </div> */}
-
             {/* Updated button section with regenerate button */}
             <div className="mt-4 flex space-x-3">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+              {/* <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
                 Back to Services
-              </button>
+              </button> */}
               
               {/* Regenerate button - only show if document is generated */}
               {isDocumentGenerated && (

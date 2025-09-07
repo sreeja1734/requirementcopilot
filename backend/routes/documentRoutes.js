@@ -309,6 +309,7 @@ console.log('[DEBUG] Number of image markdown tags found:', (generatedContent.ma
   }
 });
 
+
 router.post('/:id/regenerate', async (req, res) => {
   const { id } = req.params;
   let doc;
@@ -404,51 +405,102 @@ router.post('/:id/regenerate', async (req, res) => {
 
     generatedContent = validateAndFixTemplateStructure(generatedContent, template, docType);
 
-    // Extract PlantUML code blocks BEFORE modifying content
-    const plantUmlBlocks = [];
+    // *** PRESERVE EXISTING DIAGRAMS - Extract new PlantUML blocks but keep existing URLs ***
+    const newPlantUmlBlocks = [];
     const plantUmlRegex = /```plantuml([\s\S]*?)```/g;
     let match;
     while ((match = plantUmlRegex.exec(generatedContent)) !== null) {
-      plantUmlBlocks.push(match[1].trim());
+      newPlantUmlBlocks.push(match[1].trim());
     }
 
-    console.log(`[DEBUG] Found ${plantUmlBlocks.length} PlantUML diagrams in regenerated content`);
+    console.log(`[DEBUG] Found ${newPlantUmlBlocks.length} new PlantUML diagrams in regenerated content`);
+    console.log(`[DEBUG] Existing diagrams: ${doc.diagramUrls?.length || 0}`);
 
-    // Generate PlantUML image URLs and diagram info
-    const diagramUrls = plantUmlBlocks.map((code, index) => {
-      try {
-        const encoded = plantumlEncoder.encode(code.trim());
-        const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
-        console.log(`[DEBUG] Generated regenerated diagram URL ${index + 1}:`, url);
-        return {
-          id: index,
-          code: code,
-          url: url,
-          encodedUrl: encoded
-        };
-      } catch (err) {
-        console.error(`[DEBUG] Error encoding regenerated PlantUML diagram ${index + 1}:`, err);
-        return {
-          id: index,
-          code: code,
-          url: null,
-          error: err.message
-        };
-      }
-    });
+    // Use existing diagram URLs if available, otherwise generate new ones
+    const diagramUrls = [];
+    const plantUmlBlocks = [];
 
-    // Replace PlantUML code blocks with image markdown
-    generatedContent = generatedContent.replace(/```plantuml([\s\S]*?)```/g, (match, code) => {
-      try {
-        const encoded = plantumlEncoder.encode(code.trim());
-        return `![PlantUML Diagram](https://www.plantuml.com/plantuml/png/${encoded})`;
-      } catch (e) {
-        console.error('Failed to encode PlantUML block:', e);
-        return match; 
-      }
-    });
+    if (doc.diagramUrls && doc.diagramUrls.length > 0) {
+      // Keep existing diagrams
+      console.log('[DEBUG] Preserving existing diagrams from previous generation');
+      doc.diagramUrls.forEach((existingDiagram, index) => {
+        diagramUrls.push({
+          id: index,
+          code: existingDiagram.code || doc.plantUmlBlocks[index] || '',
+          url: existingDiagram.url,
+          encodedUrl: existingDiagram.encodedUrl
+        });
+        plantUmlBlocks.push(existingDiagram.code || doc.plantUmlBlocks[index] || '');
+      });
+      
+      // Replace PlantUML code blocks with existing image URLs
+      let diagramIndex = 0;
+      generatedContent = generatedContent.replace(/```plantuml([\s\S]*?)```/g, (match, code) => {
+        if (diagramIndex < diagramUrls.length) {
+          const existingUrl = diagramUrls[diagramIndex].url;
+          diagramIndex++;
+          console.log(`[DEBUG] Replacing PlantUML block ${diagramIndex} with existing URL: ${existingUrl}`);
+          return `![PlantUML Diagram](${existingUrl})`;
+        } else {
+          // If we have more new diagrams than existing ones, generate new URL
+          try {
+            const encoded = plantumlEncoder.encode(code.trim());
+            const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
+            diagramUrls.push({
+              id: diagramUrls.length,
+              code: code.trim(),
+              url: url,
+              encodedUrl: encoded
+            });
+            plantUmlBlocks.push(code.trim());
+            console.log(`[DEBUG] Generated new diagram URL for extra diagram: ${url}`);
+            return `![PlantUML Diagram](${url})`;
+          } catch (e) {
+            console.error('Failed to encode new PlantUML block:', e);
+            return match;
+          }
+        }
+      });
+    } else {
+      // No existing diagrams, generate new ones (fallback)
+      console.log('[DEBUG] No existing diagrams found, generating new ones');
+      newPlantUmlBlocks.forEach((code, index) => {
+        try {
+          const encoded = plantumlEncoder.encode(code.trim());
+          const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
+          diagramUrls.push({
+            id: index,
+            code: code,
+            url: url,
+            encodedUrl: encoded
+          });
+          plantUmlBlocks.push(code);
+        } catch (err) {
+          console.error(`[DEBUG] Error encoding new PlantUML diagram ${index + 1}:`, err);
+          diagramUrls.push({
+            id: index,
+            code: code,
+            url: null,
+            error: err.message
+          });
+          plantUmlBlocks.push(code);
+        }
+      });
+      
+      // Replace PlantUML code blocks with image markdown
+      generatedContent = generatedContent.replace(/```plantuml([\s\S]*?)```/g, (match, code) => {
+        try {
+          const encoded = plantumlEncoder.encode(code.trim());
+          return `![PlantUML Diagram](https://www.plantuml.com/plantuml/png/${encoded})`;
+        } catch (e) {
+          console.error('Failed to encode PlantUML block:', e);
+          return match; 
+        }
+      });
+    }
 
     console.log('[DEBUG] Regenerated content after PlantUML transformation:', generatedContent.substring(0, 500));
+    console.log(`[DEBUG] Final diagram count: ${diagramUrls.length}, preserved: ${doc.diagramUrls?.length || 0}`);
 
     // Extract Markdown tables (both in code blocks and regular markdown)
     const markdownTables = [];
@@ -485,8 +537,8 @@ router.post('/:id/regenerate', async (req, res) => {
     // Update document with regenerated content
     doc.generatedContent = generatedContent;
     doc.parsedTables = parsedTables;
-    doc.diagramUrls = diagramUrls;
-    doc.plantUmlBlocks = plantUmlBlocks;
+    doc.diagramUrls = diagramUrls; // This now preserves existing diagrams
+    doc.plantUmlBlocks = plantUmlBlocks; // This now preserves existing PlantUML code
     doc.version = (doc.version || 1) + 1; // Increment version
     doc.regeneratedAt = new Date(); // Track regeneration time
     
@@ -494,10 +546,11 @@ router.post('/:id/regenerate', async (req, res) => {
 
     console.log(`[DEBUG] Document regenerated and saved with ${diagramUrls.length} diagrams and ${parsedTables.length} tables`);
     console.log(`[DEBUG] New version: ${doc.version}`);
+    console.log(`[DEBUG] Diagrams preserved from previous version`);
 
     res.json({ 
       success: true,
-      message: 'Document successfully regenerated with new content',
+      message: 'Document successfully regenerated with new content (diagrams preserved)',
       generatedContent,
       parsedTables, 
       diagrams: diagramUrls,
@@ -506,6 +559,7 @@ router.post('/:id/regenerate', async (req, res) => {
       tableCount: parsedTables.length,
       version: doc.version,
       regeneratedAt: doc.regeneratedAt,
+      diagramsPreserved: doc.diagramUrls?.length || 0,
       document: doc 
     });
     
