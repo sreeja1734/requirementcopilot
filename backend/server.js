@@ -16,7 +16,8 @@ app.use('/api/upload', uploadRoutes);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/requirementCopilot')
+//mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongo:27017/requirementCopilot')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/requirementCopilot')
 
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error(err));

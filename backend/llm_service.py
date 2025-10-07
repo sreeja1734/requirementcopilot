@@ -26,7 +26,7 @@ class DocumentRequest(BaseModel):
 @app.post("/generate-doc")
 async def generate_doc(req: DocumentRequest):
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Add system instructions to enforce template following
         system_instruction = """
@@ -73,7 +73,7 @@ async def list_models():
 async def generate_doc_image(prompt: str = "", file: UploadFile = File(...)):
     image_bytes = await file.read()
     image = Image.open(io.BytesIO(image_bytes))
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     response = model.generate_content([prompt, image])
     return {"doc": response.text}
 
@@ -96,7 +96,7 @@ async def generate_doc_document(prompt: str = "", file: UploadFile = File(...)):
     else:
         return {"error": "Unsupported file type"}
 
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     full_prompt = f"{prompt}\n\nExtracted content:\n{content}"
     response = model.generate_content(full_prompt)
     return {"doc": response.text}
