@@ -1,0 +1,52 @@
+
+# services:
+#   backend:
+#     build: ./backend
+#     ports:
+#       - "5000:5000"
+#     env_file:
+#       - ./backend/.env
+
+#   frontend:
+#     build: ./frontend
+#     ports:
+#       - "3000:3000"
+#     depends_on:
+#       - backend
+
+
+services:
+  backend:
+    build: ./backend
+    container_name: requirementcopilot-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "python start_llm_service.py & node server.js"
+
+  frontend:
+    build: ./frontend
+    container_name: requirementcopilot-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+
+  mongo:
+    image: mongo:6
+    container_name: requirementcopilot-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
